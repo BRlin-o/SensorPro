@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './', // Use relative base for GitHub Pages compatibility
+  base: '/', // Use root base for custom domain (sensor.brlin.org)
 })
