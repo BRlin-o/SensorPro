@@ -1,374 +1,68 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Compass,
-  Move,
-  Activity,
-  Settings2,
-  Info,
-  AlertCircle,
-  Maximize2,
-  Zap,
-  Navigation,
-  type LucideProps
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+/**
+ * App.tsx — SensorPro 應用入口
+ *
+ * 此檔案僅負責：
+ * 1. 管理當前 Tab 狀態（水平儀 / 感測器 / 資訊）
+ * 2. 呼叫 useSensorData Hook 取得感測器資料
+ * 3. 組合各子元件形成完整頁面佈局
+ *
+ * 所有業務邏輯、UI 元件、型別定義皆已拆分至獨立模組，
+ * 詳見 src/types/、src/hooks/、src/components/ 目錄。
+ */
 
-// --- Type Definitions ---
+import { useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 
-interface SensorData {
-  orientation: {
-    alpha: number;
-    beta: number;
-    gamma: number;
-  };
-  motion: {
-    x: number;
-    y: number;
-    z: number;
-  };
-  rotationRate: {
-    alpha: number;
-    beta: number;
-    gamma: number;
-  };
-}
+// Types
+import type { TabId } from './types/sensor';
 
-// Augment Window interface for iOS 13+ permission request
-interface DeviceOrientationEventiOS extends DeviceOrientationEvent {
-  requestPermission?: () => Promise<'granted' | 'denied'>;
-}
+// Hooks
+import { useSensorData } from './hooks/useSensorData';
 
-// --- Utility Components ---
+// Layout Components
+import { Header } from './components/layout/Header';
+import { BottomNav } from './components/layout/BottomNav';
+import { PermissionBanner } from './components/layout/PermissionBanner';
 
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <div className={`bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xl border border-slate-100 dark:border-slate-800 ${className}`}>
-    {children}
-  </div>
-);
+// View Components
+import { LevelView } from './components/views/LevelView';
+import { SensorDetailView } from './components/views/SensorDetailView';
+import { InfoView } from './components/views/InfoView';
 
-const Badge: React.FC<{ children: React.ReactNode; color?: 'blue' | 'green' | 'amber' | 'emerald' }> = ({ children, color = "blue" }) => {
-  const colors = {
-    blue: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-    green: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
-    emerald: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
-    amber: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
-  };
-  return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[color]}`}>
-      {children}
-    </span>
-  );
-};
-
-// --- Main App Component ---
+// ─── App 主元件 ──────────────────────────────────────────────
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'level' | 'sensors' | 'info'>('level');
-  const [sensorData, setSensorData] = useState<SensorData>({
-    orientation: { alpha: 0, beta: 0, gamma: 0 },
-    motion: { x: 0, y: 0, z: 0 },
-    rotationRate: { alpha: 0, beta: 0, gamma: 0 }
-  });
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_isPermissionGranted, setIsPermissionGranted] = useState(false);
-  const [needsPermission, setNeedsPermission] = useState(false);
+  // 當前選中的 Tab
+  const [activeTab, setActiveTab] = useState<TabId>('level');
 
-  const startSensors = useCallback(() => {
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      setSensorData(prev => ({
-        ...prev,
-        orientation: {
-          alpha: Number(event.alpha?.toFixed(1)) || 0,
-          beta: Number(event.beta?.toFixed(1)) || 0,
-          gamma: Number(event.gamma?.toFixed(1)) || 0
-        }
-      }));
-    };
-
-    const handleMotion = (event: DeviceMotionEvent) => {
-      setSensorData(prev => ({
-        ...prev,
-        motion: {
-          x: Number(event.accelerationIncludingGravity?.x?.toFixed(2)) || 0,
-          y: Number(event.accelerationIncludingGravity?.y?.toFixed(2)) || 0,
-          z: Number(event.accelerationIncludingGravity?.z?.toFixed(2)) || 0
-        },
-        rotationRate: {
-          alpha: Number(event.rotationRate?.alpha?.toFixed(2)) || 0,
-          beta: Number(event.rotationRate?.beta?.toFixed(2)) || 0,
-          gamma: Number(event.rotationRate?.gamma?.toFixed(2)) || 0
-        }
-      }));
-    };
-
-    window.addEventListener('deviceorientation', handleOrientation);
-    window.addEventListener('devicemotion', handleMotion);
-
-    return () => {
-      window.removeEventListener('deviceorientation', handleOrientation);
-      window.removeEventListener('devicemotion', handleMotion);
-    };
-  }, []);
-
-  // Check if permission is needed (mainly for iOS)
-  useEffect(() => {
-    const DOE = DeviceOrientationEvent as unknown as DeviceOrientationEventiOS;
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DOE.requestPermission === 'function') {
-      setNeedsPermission(true);
-    } else {
-      // For Android or older iOS, we can try starting directly
-      startSensors();
-    }
-  }, [startSensors]);
-
-  const requestPermission = async () => {
-    try {
-      const DOE = DeviceOrientationEvent as unknown as DeviceOrientationEventiOS;
-      if (typeof DOE.requestPermission === 'function') {
-        const response = await DOE.requestPermission();
-        if (response === 'granted') {
-          setIsPermissionGranted(true);
-          setNeedsPermission(false);
-          startSensors();
-        }
-      }
-    } catch (error) {
-      console.error("Sensor permission denied", error);
-    }
-  };
-
-  // --- UI Sections ---
-
-  const LevelView = () => {
-    const { beta, gamma } = sensorData.orientation;
-    // Calculate bubble position (beta: -90 to 90, gamma: -90 to 90)
-    // Clamp values for visual representation
-    const bubbleX = Math.max(Math.min(gamma * 2, 100), -100);
-    const bubbleY = Math.max(Math.min(beta * 2, 100), -100);
-    const isLevel = Math.abs(beta) < 1 && Math.abs(gamma) < 1;
-
-    return (
-      <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-        <Card className="relative aspect-square flex items-center justify-center overflow-hidden">
-          {/* Background Grid */}
-          <div className="absolute inset-0 grid grid-cols-6 grid-rows-6 opacity-5">
-            {[...Array(36)].map((_, i) => <div key={i} className="border border-slate-900 dark:border-white" />)}
-          </div>
-
-          {/* Outer Circle */}
-          <div className="relative w-64 h-64 rounded-full border-4 border-slate-100 dark:border-slate-800 flex items-center justify-center">
-            {/* Target Crosshair */}
-            <div className="absolute w-full h-[1px] bg-slate-200 dark:bg-slate-700" />
-            <div className="absolute h-full w-[1px] bg-slate-200 dark:bg-slate-700" />
-            <div className="absolute w-12 h-12 rounded-full border border-slate-300 dark:border-slate-600 border-dashed" />
-
-            {/* The Bubble */}
-            <motion.div
-              animate={{ x: bubbleX, y: bubbleY }}
-              transition={{ type: "spring", damping: 20, stiffness: 150 }}
-              className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center
-                ${isLevel ? 'bg-emerald-500' : 'bg-blue-500'} transition-colors duration-300`}
-            >
-              <div className="w-4 h-4 rounded-full bg-white/30 blur-[2px]" />
-            </motion.div>
-          </div>
-
-          <div className="absolute bottom-4 right-4 text-xs font-mono text-slate-400">
-            {isLevel ? "已水平" : "調整中"}
-          </div>
-        </Card>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="p-4 flex flex-col items-center">
-            <span className="text-xs text-slate-500 mb-1 uppercase tracking-wider">前後傾斜 (Beta)</span>
-            <span className="text-2xl font-bold font-mono">{beta}°</span>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-              <motion.div
-                animate={{ width: `${Math.min(Math.abs(beta), 90) / 90 * 100}%` }}
-                className="h-full bg-blue-500"
-              />
-            </div>
-          </Card>
-          <Card className="p-4 flex flex-col items-center">
-            <span className="text-xs text-slate-500 mb-1 uppercase tracking-wider">左右傾斜 (Gamma)</span>
-            <span className="text-2xl font-bold font-mono">{gamma}°</span>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-              <motion.div
-                animate={{ width: `${Math.min(Math.abs(gamma), 90) / 90 * 100}%` }}
-                className="h-full bg-indigo-500"
-              />
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  };
-
-  const SensorDetailView = () => {
-    const sensors = [
-      { label: '加速度計 (G-Sensor)', data: sensorData.motion, icon: <Activity size={18} />, color: 'emerald' as const },
-      { label: '陀螺儀 (Gyro)', data: sensorData.rotationRate, icon: <RotateCw size={18} />, color: 'amber' as const },
-      { label: '方位角 (Alpha)', data: { alpha: sensorData.orientation.alpha }, icon: <Compass size={18} />, color: 'blue' as const }
-    ];
-
-    return (
-      <div className="flex flex-col gap-4 pb-20">
-        {sensors.map((s, idx) => (
-          <Card key={idx} className="overflow-hidden">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <div className={`p-2 rounded-xl bg-${s.color}-100 dark:bg-${s.color}-900/30 text-${s.color}-600 dark:text-${s.color}-400`}>
-                  {s.icon}
-                </div>
-                <h3 className="font-semibold">{s.label}</h3>
-              </div>
-              <Badge color={s.color}>即時</Badge>
-            </div>
-
-            <div className="space-y-4">
-              {Object.entries(s.data).map(([key, val]) => (
-                <div key={key}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-500 font-mono uppercase">{key} 軸</span>
-                    <span className="font-bold">{val}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(Math.abs(val as number) * 10, 100)}%` }}
-                      className={`h-full bg-${s.color}-500 opacity-60`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
-    );
-  };
-
-  const InfoView = () => (
-    <div className="flex flex-col gap-6">
-      <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none">
-        <h2 className="text-xl font-bold mb-2">關於傳感器 App</h2>
-        <p className="text-blue-100 text-sm leading-relaxed">
-          這款工具利用您手機內建的 MEMS 傳感器（微機電系統）來提供即時數據。
-          這包含了精確的重力感應與旋轉速率監測。
-        </p>
-      </Card>
-
-      <div className="space-y-3">
-        {[
-          { title: "加速計", desc: "測量線性加速度與重力感應。", icon: <Zap /> },
-          { title: "陀螺儀", desc: "檢測設備旋轉的角速度。", icon: <Maximize2 /> },
-          { title: "磁力計", desc: "感應地球磁場，用於電子羅盤。", icon: <Navigation /> }
-        ].map((item, i) => (
-          <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-            <div className="text-blue-500">{item.icon}</div>
-            <div>
-              <h4 className="font-bold text-sm">{item.title}</h4>
-              <p className="text-xs text-slate-500">{item.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="p-4 text-center">
-        <p className="text-xs text-slate-400">版本 1.0.0 • 台灣開發</p>
-      </div>
-    </div>
-  );
+  // 感測器資料 + iOS 權限管理
+  const { sensorData, needsPermission, requestPermission } = useSensorData();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 font-sans p-4 pb-24 max-w-md mx-auto">
+      {/* 頂部標頭 */}
+      <Header />
 
-      {/* Header */}
-      <header className="flex justify-between items-center mb-8 pt-4">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight">SENSOR<span className="text-blue-500">PRO</span></h1>
-          <p className="text-xs text-slate-400 font-medium">手機傳感器中心</p>
-        </div>
-        <button className="p-2 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-slate-100 dark:border-slate-800">
-          <Settings2 size={20} />
-        </button>
-      </header>
-
-      {/* Permission Overlay */}
+      {/* iOS 權限提示（僅在需要授權時顯示） */}
       {needsPermission && (
-        <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-          <div className="flex gap-4 items-start">
-            <AlertCircle className="text-amber-500 shrink-0 mt-1" />
-            <div>
-              <h3 className="font-bold text-amber-800 dark:text-amber-400">需要傳感器權限</h3>
-              <p className="text-sm text-amber-700 dark:text-amber-500 mb-4 leading-snug">
-                為了顯示精確的水平儀與數據，請允許存取您設備的運動傳感器。
-              </p>
-              <button
-                onClick={requestPermission}
-                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-md active:scale-95"
-              >
-                立即啟用
-              </button>
-            </div>
-          </div>
-        </Card>
+        <PermissionBanner onRequestPermission={requestPermission} />
       )}
 
-      {/* Tab Content */}
+      {/* 主要內容區：依 Tab 切換顯示不同 View */}
       <main>
         <AnimatePresence mode="wait">
-          {activeTab === 'level' && <LevelView key="level" />}
-          {activeTab === 'sensors' && <SensorDetailView key="sensors" />}
+          {activeTab === 'level' && (
+            <LevelView key="level" orientation={sensorData.orientation} />
+          )}
+          {activeTab === 'sensors' && (
+            <SensorDetailView key="sensors" sensorData={sensorData} />
+          )}
           {activeTab === 'info' && <InfoView key="info" />}
         </AnimatePresence>
       </main>
 
-      {/* Navigation Bar */}
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-800 rounded-3xl p-2 shadow-2xl flex justify-between items-center z-50">
-        {[
-          { id: 'level', icon: <Move />, label: '水平儀' },
-          { id: 'sensors', icon: <Activity />, label: '傳感器' },
-          { id: 'info', icon: <Info />, label: '資訊' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-2xl transition-all relative ${activeTab === tab.id ? 'text-blue-500' : 'text-slate-400'
-              }`}
-          >
-            {activeTab === tab.id && (
-              <motion.div
-                layoutId="nav-bg"
-                className="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 rounded-2xl -z-10"
-              />
-            )}
-            {React.cloneElement(tab.icon as React.ReactElement, { size: 20 } as LucideProps)}
-            <span className="text-[10px] font-bold uppercase tracking-tighter">{tab.label}</span>
-          </button>
-        ))}
-      </nav>
+      {/* 底部導覽列 */}
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
-  );
-}
-
-// Add simple helper for Rotation Icon which wasn't in original list
-function RotateCw({ size }: LucideProps) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5" />
-    </svg>
   );
 }
