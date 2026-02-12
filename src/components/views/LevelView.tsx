@@ -106,10 +106,10 @@ export function LevelView({ orientation, isLandscape, screenAngle }: LevelViewPr
             >
                 <Card className="p-4 flex flex-col items-center flex-1">
                     <span className="text-xs text-slate-500 mb-1 uppercase tracking-wider">前後傾斜 (Beta)</span>
-                    <span className="text-2xl font-bold font-mono">{Math.round(visualBeta)}°</span>
+                    <span className="text-2xl font-bold font-mono">{Math.round(-visualBeta)}°</span>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
                         <motion.div
-                            animate={{ width: `${(Math.min(Math.abs(visualBeta), 90) / 90) * 100}%` }}
+                            animate={{ width: `${(Math.min(Math.abs(-visualBeta), 90) / 90) * 100}%` }}
                             className="h-full bg-blue-500"
                         />
                     </div>
