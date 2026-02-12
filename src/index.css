@@ -16,3 +16,30 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+/* ─── 橫屏佈局 ─────────────────────────────────────────────── */
+
+/**
+ * 橫屏時採用「左內容 + 右導覽列」的真正橫向佈局，
+ * 充分利用螢幕寬度，避免旋轉容器造成的溢出問題。
+ */
+
+/* 橫屏根容器：左右佈局 */
+@media (orientation: landscape) {
+  .landscape-shell {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    /* dvh for mobile browsers that hide the address bar */
+    min-height: 100dvh;
+  }
+
+  /* 主內容區佔滿剩餘空間，但給右側導覽留空間 */
+  .landscape-main {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    padding-right: 4.5rem;
+    /* space for right-side nav */
+  }
+}
